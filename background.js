@@ -147,13 +147,22 @@ function withState(fn) {
   return queue;
 }
 
-function settle(state, outcome) {
+function settle(state, outcome, id) {
   const job = state.job;
   if (!job) return;
-  if (outcome === 'complete') job.completed++;
-  else job.failed++;
-  job.finished = job.completed + job.failed >= job.total;
+  if (outcome === 'complete') {
+    job.completed++;
+    if (id != null) job.lastId = id; // lets the popup open the folder with this file selected
+  } else {
+    job.failed++;
+  }
+  markFinished(job);
   broadcast(job);
+}
+
+function markFinished(job) {
+  job.finished = job.completed + job.failed >= job.total;
+  if (job.finished && !job.finishedAt) job.finishedAt = Date.now();
 }
 
 chrome.downloads.onChanged.addListener((delta) => {
@@ -164,15 +173,15 @@ chrome.downloads.onChanged.addListener((delta) => {
     delete state.ids[delta.id];
     if (loginNeededIds.delete(delta.id)) {
       state.job.loginNeeded = (state.job.loginNeeded || 0) + 1;
-      settle(state, s);
+      settle(state, s, delta.id);
     } else if (webPageIds.delete(delta.id)) {
       // Not a failure: it just wasn't a file
       state.job.total--;
       state.job.skipped = (state.job.skipped || 0) + 1;
-      state.job.finished = state.job.completed + state.job.failed >= state.job.total;
+      markFinished(state.job);
       broadcast(state.job);
     } else {
-      settle(state, s);
+      settle(state, s, delta.id);
     }
   });
 });
@@ -185,6 +194,7 @@ async function startBatch(folder, items) {
       state.ids = {};
     }
     state.job.total += items.length;
+    state.job.folder = folder;
     broadcast(state.job);
     return { ...state.job };
   });
@@ -218,7 +228,7 @@ async function runItems(folder, items) {
         await withState((state) => {
           if (!state.ids[downloadId]) return;
           delete state.ids[downloadId];
-          settle(state, d.state);
+          settle(state, d.state, downloadId);
         });
       }
     }

@@ -13,7 +13,8 @@ It started as a Moodle tool. It now works on almost any website with files on it
 ## What it does
 
 - Scans the page you're on and lists every file it finds (PDFs, Word, Excel, PowerPoint, zips, images, audio and video)
-- Lets you filter the list by file type and untick anything you don't want
+- Lets you search, filter by file type (with counts), and untick anything you don't want. Your ticks are kept when you switch filters
+- Works in light and dark mode, following your system setting
 - Saves everything you selected into `Downloads/<folder-name>/`, with the folder name filled in from the page title (you can change it)
 - Keeps the real file names the website gives, so a Word file isn't saved as `.pdf`
 - Keeps downloading in the background after you close the popup. The toolbar icon shows progress (`3/10`), then `✓` when done, or `!2` if 2 files failed
@@ -30,10 +31,10 @@ It started as a Moodle tool. It now works on almost any website with files on it
 ## How to use it
 
 1. Open a page with files on it (for example, a Moodle course page)
-2. Click the extension icon
-3. Click **🔍 Scan This Page**
-4. Rename the folder if you want, and untick anything you don't need
-5. Click **⬇ Download Selected**
+2. Click the extension icon. It scans the page straight away
+3. Rename the folder if you want. Search or filter by type, and untick anything you don't need
+4. Click **Download N files**
+5. When it's done, click **Show in folder** to open the files
 
 ## How it finds files
 

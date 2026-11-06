@@ -1,56 +1,33 @@
-const DOC_EXTENSIONS = {
-  pdf: { label: 'PDF', badge: 'badge-pdf' },
-  doc: { label: 'DOC', badge: 'badge-doc' },
-  docx: { label: 'DOCX', badge: 'badge-doc' },
-  xls: { label: 'XLS', badge: 'badge-xls' },
-  xlsx: { label: 'XLSX', badge: 'badge-xls' },
-  csv: { label: 'CSV', badge: 'badge-xls' },
-  ppt: { label: 'PPT', badge: 'badge-doc' },
-  pptx: { label: 'PPTX', badge: 'badge-doc' },
-  txt: { label: 'TXT', badge: 'badge-other' },
-  rtf: { label: 'RTF', badge: 'badge-doc' },
-  odt: { label: 'ODT', badge: 'badge-doc' },
-  ods: { label: 'ODS', badge: 'badge-xls' },
-  odp: { label: 'ODP', badge: 'badge-doc' },
-  zip: { label: 'ZIP', badge: 'badge-zip' },
-  rar: { label: 'RAR', badge: 'badge-zip' },
-  '7z': { label: '7Z', badge: 'badge-zip' },
-  tar: { label: 'TAR', badge: 'badge-zip' },
-  gz: { label: 'GZ', badge: 'badge-zip' },
-  png: { label: 'PNG', badge: 'badge-img' },
-  jpg: { label: 'JPG', badge: 'badge-img' },
-  jpeg: { label: 'JPEG', badge: 'badge-img' },
-  gif: { label: 'GIF', badge: 'badge-img' },
-  svg: { label: 'SVG', badge: 'badge-img' },
-  webp: { label: 'WEBP', badge: 'badge-img' },
-  mp3: { label: 'MP3', badge: 'badge-other' },
-  mp4: { label: 'MP4', badge: 'badge-other' },
-  wav: { label: 'WAV', badge: 'badge-other' },
-  json: { label: 'JSON', badge: 'badge-other' },
-  xml: { label: 'XML', badge: 'badge-other' },
-  md: { label: 'MD', badge: 'badge-other' },
-  epub: { label: 'EPUB', badge: 'badge-doc' },
+// ---------- File types ----------
+const TYPE_STYLE = {
+  pdf: 't-pdf',
+  doc: 't-doc', docx: 't-doc', rtf: 't-doc', odt: 't-doc', txt: 't-doc', md: 't-doc', epub: 't-doc',
+  xls: 't-xls', xlsx: 't-xls', csv: 't-xls', ods: 't-xls', json: 't-xls', xml: 't-xls',
+  ppt: 't-ppt', pptx: 't-ppt', odp: 't-ppt',
+  png: 't-img', jpg: 't-img', jpeg: 't-img', gif: 't-img', svg: 't-img', webp: 't-img',
+  zip: 't-zip', rar: 't-zip', '7z': 't-zip', tar: 't-zip', gz: 't-zip',
+  mp3: 't-media', mp4: 't-media', wav: 't-media',
 };
 
 // Files whose type we can't tell until the server answers use this key.
 const UNKNOWN = 'file';
 
-let files = [];
+// ---------- State ----------
+let files = [];               // everything the scan found
+const selected = new Set();   // indices into files[] — kept across filters and searches
+let activeType = 'all';
+let query = '';
+let lastJobShown = null;
 
-document.getElementById('scanBtn').addEventListener('click', scanPage);
-document.getElementById('selectAll').addEventListener('click', () => toggleAll(true));
-document.getElementById('deselectAll').addEventListener('click', () => toggleAll(false));
-document.getElementById('downloadBtn').addEventListener('click', downloadSelected);
+const $ = (id) => document.getElementById(id);
 
-// Progress updates from the background worker (only arrive while the popup is open).
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'jobProgress') showJob(msg.job);
-});
-
-// If a batch is still running from earlier, show its progress on open.
-chrome.runtime.sendMessage({ action: 'jobStatus' }).then((job) => {
-  if (job && !job.finished) showJob(job);
-}).catch(() => {});
+const ICONS = {
+  check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg>',
+  warn: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 8v5"/><path d="M12 17h.01"/></svg>',
+  empty: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9.5 13.5h5"/></svg>',
+  blocked: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>',
+  search: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+};
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -58,13 +35,77 @@ function escapeHtml(s) {
   }[c]));
 }
 
-async function scanPage() {
-  const scanBtn = document.getElementById('scanBtn');
-  scanBtn.textContent = '⏳ Scanning...';
-  scanBtn.disabled = true;
+// ---------- Wiring ----------
+$('rescanBtn').addEventListener('click', scanPage);
+$('downloadBtn').addEventListener('click', downloadSelected);
+$('showFolderBtn').addEventListener('click', showFolder);
+$('search').addEventListener('input', (e) => { query = e.target.value.trim().toLowerCase(); renderFiles(); });
+$('checkAll').addEventListener('change', (e) => {
+  for (const i of visibleIndices()) e.target.checked ? selected.add(i) : selected.delete(i);
+  renderFiles();
+});
+$('fileList').addEventListener('change', (e) => {
+  const i = Number(e.target.dataset.index);
+  if (Number.isNaN(i)) return;
+  e.target.checked ? selected.add(i) : selected.delete(i);
+  e.target.closest('.row').classList.toggle('off', !e.target.checked);
+  updateSelectionUi();
+});
 
+// Progress updates from the background worker (only arrive while the popup is open).
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'jobProgress') showJob(msg.job);
+});
+
+// Show a batch that's still running (or just finished) from earlier.
+chrome.runtime.sendMessage({ action: 'jobStatus' }).then((job) => {
+  if (job) showJob(job, { quiet: true });
+}).catch(() => {});
+
+// Scan straight away — one less click.
+scanPage();
+
+// ---------- Scanning ----------
+function showState(icon, title, text) {
+  $('toolbar').hidden = true;
+  $('listHead').hidden = true;
+  $('fileList').innerHTML = `
+    <div class="state">
+      <div class="big">${icon}</div>
+      <h2>${escapeHtml(title)}</h2>
+      ${text ? `<p>${escapeHtml(text)}</p>` : ''}
+    </div>`;
+  updateSelectionUi();
+}
+
+function showSkeleton() {
+  $('toolbar').hidden = true;
+  $('listHead').hidden = true;
+  const widths = [72, 55, 80, 48, 64, 58];
+  $('fileList').innerHTML = widths.map((w) => `
+    <div class="skeleton">
+      <i style="width:38px;height:38px;border-radius:8px"></i>
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+        <i style="width:${w}%;height:11px"></i>
+        <i style="width:${w / 2}%;height:9px"></i>
+      </div>
+    </div>`).join('');
+}
+
+async function scanPage() {
+  const btn = $('rescanBtn');
+  btn.disabled = true;
+  btn.classList.add('spinning');
+  showSkeleton();
+
+  let tab;
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    try {
+      $('pageHost').textContent = new URL(tab.url).hostname.replace(/^www\./, '') || 'This page';
+    } catch {
+      $('pageHost').textContent = 'This page';
+    }
 
     // Scan every frame we're allowed into (pages often show files inside iframes).
     // Some cross-origin frames refuse injection, so fall back to just the main frame.
@@ -90,43 +131,40 @@ async function scanPage() {
         files.push(f);
       }
     }
+    selected.clear();
+    files.forEach((_, i) => selected.add(i));
+    activeType = 'all';
+    query = '';
+    $('search').value = '';
+
+    const folderInput = $('folderName');
+    if (!folderInput.value) {
+      folderInput.value = (tab.title || '')
+        .replace(/\s+-\s+Google (Drive|Docs|Sheets|Slides)\s*$/i, '')
+        .replace(/\.[a-z0-9]{2,5}$/i, '')
+        .replace(/[^a-zA-Z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .substring(0, 40) || 'Batch-Downloads';
+    }
 
     if (files.length === 0) {
-      document.getElementById('fileList').innerHTML = `
-        <div class="empty-state">
-          <div class="big-icon">📭</div>
-          <p>No downloadable files found</p>
-          <p class="hint">Files behind JavaScript-only buttons can't be detected</p>
-        </div>`;
-      document.getElementById('statusBar').style.display = 'none';
-      document.getElementById('filterRow').style.display = 'none';
+      showState(ICONS.empty, 'No files found on this page',
+        'Files behind buttons that only run JavaScript can\'t be detected.');
     } else {
-      const folderInput = document.getElementById('folderName');
-      if (!folderInput.value) {
-        const sanitized = (tab.title || '')
-          .replace(/\s+-\s+Google (Drive|Docs|Sheets|Slides)\s*$/i, '')
-          .replace(/\.[a-z0-9]{2,5}$/i, '')
-          .replace(/[^a-zA-Z0-9\s-]/g, '')
-          .trim()
-          .replace(/\s+/g, '-')
-          .substring(0, 40);
-        folderInput.value = sanitized || 'Batch-Downloads';
-      }
-
       renderFilters();
       renderFiles();
     }
   } catch (err) {
-    document.getElementById('fileList').innerHTML = `
-      <div class="empty-state">
-        <div class="big-icon">⚠️</div>
-        <p>Can't scan this page</p>
-        <p class="hint">${escapeHtml(err.message || 'Try a different page')}</p>
-      </div>`;
+    const url = tab?.url || '';
+    const blocked = /^(chrome|edge|about|chrome-extension|devtools):/i.test(url) || /chromewebstore\.google\.com|chrome\.google\.com\/webstore/i.test(url);
+    showState(ICONS.blocked, 'Can\'t scan this page',
+      blocked ? 'Chrome doesn\'t let extensions read its own pages or the Web Store. Open a normal website and try again.'
+              : (err.message || 'Try reloading the page, then scan again.'));
   }
 
-  scanBtn.textContent = '🔍 Scan This Page';
-  scanBtn.disabled = false;
+  btn.disabled = false;
+  btn.classList.remove('spinning');
 }
 
 // Runs inside the web page (each frame). Must be self-contained: no outside references.
@@ -412,80 +450,106 @@ async function findDocuments() {
   return found;
 }
 
+// ---------- List rendering ----------
 function typeKey(file) {
   return file.ext || UNKNOWN;
 }
 
+function sourceLabel(file) {
+  if (file.google) return 'Google Drive';
+  try { return new URL(file.url).hostname.replace(/^www\./, ''); } catch { return ''; }
+}
+
+function visibleIndices() {
+  const out = [];
+  files.forEach((f, i) => {
+    if (activeType !== 'all' && typeKey(f) !== activeType) return;
+    if (query && !`${f.filename} ${f.text}`.toLowerCase().includes(query)) return;
+    out.push(i);
+  });
+  return out;
+}
+
 function renderFilters() {
-  const types = [...new Set(files.map(typeKey))].sort();
-  const filterRow = document.getElementById('filterRow');
+  const counts = {};
+  for (const f of files) counts[typeKey(f)] = (counts[typeKey(f)] || 0) + 1;
+  const types = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
 
-  if (types.length <= 1) {
-    filterRow.style.display = 'none';
-    return;
-  }
+  $('toolbar').hidden = false;
+  const row = $('filterRow');
+  row.hidden = types.length <= 1;
+  row.innerHTML = [['all', files.length], ...types.map((t) => [t, counts[t]])]
+    .map(([t, n]) => `<button class="chip${t === activeType ? ' active' : ''}" data-filter="${escapeHtml(t)}">
+        ${t === 'all' ? 'All' : escapeHtml(t.toUpperCase())}<span class="n">${n}</span></button>`)
+    .join('');
 
-  filterRow.style.display = 'flex';
-  filterRow.innerHTML = `<button class="filter-chip active" data-filter="all">All</button>` +
-    types.map(t => `<button class="filter-chip" data-filter="${escapeHtml(t)}">${escapeHtml(t.toUpperCase())}</button>`).join('');
-
-  filterRow.querySelectorAll('.filter-chip').forEach(chip => {
+  row.querySelectorAll('.chip').forEach((chip) => {
     chip.addEventListener('click', () => {
-      filterRow.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      renderFiles(chip.dataset.filter);
+      activeType = chip.dataset.filter;
+      row.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === chip));
+      renderFiles();
     });
   });
 }
 
-function renderFiles(filter = 'all') {
-  const list = document.getElementById('fileList');
+function renderFiles() {
+  const list = $('fileList');
+  const indices = visibleIndices();
+  $('listHead').hidden = false;
 
-  list.innerHTML = files.map((file, index) => {
-    if (filter !== 'all' && typeKey(file) !== filter) return '';
-    const info = DOC_EXTENSIONS[file.ext] || { label: file.ext ? file.ext.toUpperCase() : 'FILE', badge: 'badge-other' };
-    const displayName = file.filename || file.text || file.url;
-    let subtitle = file.text && file.text !== file.filename ? file.text : '';
-    const note = file.google ? 'Google Drive · uses your Google sign-in' : (file.nameFromServer ? 'name from site' : '');
-    if (note) subtitle = subtitle ? `${subtitle} · ${note}` : note;
-    return `
-      <div class="file-item">
-        <input type="checkbox" data-index="${index}" checked />
-        <div class="file-info">
-          <div class="file-name" title="${escapeHtml(file.url)}">${escapeHtml(displayName)}</div>
-          <div class="file-type">${escapeHtml(subtitle)}</div>
-        </div>
-        <span class="file-badge ${info.badge}">${escapeHtml(info.label)}</span>
-      </div>`;
-  }).join('');
-
-  list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-    cb.addEventListener('change', updateCount);
-  });
-
-  document.getElementById('statusBar').style.display = 'flex';
-  document.getElementById('totalCount').textContent = `${files.length} found`;
-  updateCount();
+  if (indices.length === 0) {
+    list.innerHTML = `<div class="state"><div class="big">${ICONS.search}</div><h2>No matches</h2><p>Try a different search or filter.</p></div>`;
+  } else {
+    list.innerHTML = indices.map((i) => {
+      const file = files[i];
+      const on = selected.has(i);
+      const label = file.ext ? file.ext.toUpperCase().slice(0, 4) : 'FILE';
+      const style = TYPE_STYLE[file.ext] || 't-other';
+      const name = file.filename || file.text || file.url;
+      const meta = [escapeHtml(sourceLabel(file))];
+      // Only show the link text if it says something the name doesn't
+      const stem = (s) => String(s || '').toLowerCase().replace(/\.[a-z0-9]{2,5}$/, '').replace(/[^a-z0-9]/g, '');
+      if (file.text && stem(file.text) !== stem(name) && !/^https?:/i.test(file.text)) meta.push(escapeHtml(file.text));
+      if (file.nameFromServer && !file.google) meta.push('<span class="tag">name from site</span>');
+      return `
+        <label class="row${on ? '' : ' off'}" title="${escapeHtml(file.url)}">
+          <input type="checkbox" data-index="${i}"${on ? ' checked' : ''} />
+          <span class="type ${style}">${escapeHtml(label)}</span>
+          <span class="info">
+            <span class="name" style="display:block">${escapeHtml(name)}</span>
+            <span class="meta" style="display:block">${meta.join(' · ')}</span>
+          </span>
+        </label>`;
+    }).join('');
+  }
+  updateSelectionUi();
 }
 
-function toggleAll(state) {
-  document.querySelectorAll('#fileList input[type="checkbox"]').forEach(cb => {
-    cb.checked = state;
-  });
-  updateCount();
+function updateSelectionUi() {
+  const total = files.length;
+  const count = selected.size;
+  const visible = visibleIndices();
+  const visibleOn = visible.filter((i) => selected.has(i)).length;
+
+  const all = $('checkAll');
+  all.checked = visible.length > 0 && visibleOn === visible.length;
+  all.indeterminate = visibleOn > 0 && visibleOn < visible.length;
+
+  $('selectionText').innerHTML = `<strong>${count}</strong> of ${total} selected`;
+  $('visibleText').textContent = visible.length !== total ? `showing ${visible.length}` : '';
+
+  const btn = $('downloadBtn');
+  if (!btn.dataset.busy) {
+    btn.disabled = count === 0;
+    $('downloadLabel').textContent = count === 0 ? 'Download' : `Download ${count} file${count === 1 ? '' : 's'}`;
+  }
 }
 
-function updateCount() {
-  const checked = document.querySelectorAll('#fileList input[type="checkbox"]:checked');
-  document.getElementById('selectedCount').textContent = checked.length;
-  document.getElementById('downloadBtn').disabled = checked.length === 0;
-}
-
+// ---------- Downloading ----------
 async function downloadSelected() {
-  const folderName = document.getElementById('folderName').value.trim() || 'Batch-Downloads';
-  const checked = document.querySelectorAll('#fileList input[type="checkbox"]:checked');
-  const items = [...checked].map(cb => files[parseInt(cb.dataset.index, 10)]).map((file) => {
-    // Moodle resource pages: ask for the file itself rather than the viewer page
+  const folderName = $('folderName').value.trim() || 'Batch-Downloads';
+  // Every ticked file, whatever filter or search is showing
+  const items = [...selected].sort((a, b) => a - b).map((i) => files[i]).map((file) => {
     let url = file.url;
     try {
       const u = new URL(url);
@@ -508,30 +572,49 @@ async function downloadSelected() {
   if (job) showJob(job);
 }
 
-function showJob(job) {
-  const btn = document.getElementById('downloadBtn');
-  const progressBar = document.getElementById('progressBar');
-  const progressFill = document.getElementById('progressFill');
-
+function showJob(job, { quiet = false } = {}) {
+  lastJobShown = job;
+  const btn = $('downloadBtn');
   const done = job.completed + job.failed;
-  progressBar.style.display = 'block';
-  progressFill.style.width = `${job.total ? (done / job.total) * 100 : 0}%`;
 
   if (!job.finished) {
+    $('result').hidden = true;
+    $('progress').hidden = false;
+    const pct = job.total ? Math.round((done / job.total) * 100) : 0;
+    $('progressText').textContent = `Downloading ${done} of ${job.total}…`;
+    $('progressPct').textContent = `${pct}%`;
+    $('progressFill').style.width = `${pct}%`;
+    btn.dataset.busy = '1';
     btn.disabled = true;
-    btn.innerHTML = `<span>⏳</span> Downloading ${done}/${job.total}...`;
+    $('downloadLabel').textContent = 'Downloading…';
     return;
   }
 
-  const login = job.loginNeeded ? ` (${job.loginNeeded} need Google sign-in)` : '';
-  const skipped = job.skipped ? `, ${job.skipped} skipped (web pages)` : '';
-  btn.innerHTML = job.failed
-    ? `<span>⚠️</span> ${job.completed} saved, ${job.failed} failed${login}${skipped}`
-    : `<span>✅</span> ${job.completed} saved${skipped}`;
-  setTimeout(() => {
-    btn.innerHTML = '<span>⬇</span> Download Selected';
-    progressBar.style.display = 'none';
-    progressFill.style.width = '0%';
-    updateCount();
-  }, 3000);
+  $('progress').hidden = true;
+  delete btn.dataset.busy;
+  updateSelectionUi();
+
+  // When reopening the popup, only show the last result for a little while
+  if (quiet && job.finishedAt && Date.now() - job.finishedAt > 5 * 60 * 1000) return;
+
+  const problems = job.failed > 0;
+  const details = [];
+  if (job.failed) details.push(`${job.failed} failed`);
+  if (job.loginNeeded) details.push(`${job.loginNeeded} need Google sign-in`);
+  if (job.skipped) details.push(`${job.skipped} skipped (web page${job.skipped === 1 ? '' : 's'})`);
+
+  $('result').hidden = false;
+  $('result').className = `result ${problems ? 'warn' : 'ok'}`;
+  $('resultIcon').innerHTML = problems ? ICONS.warn : ICONS.check;
+  $('resultTitle').textContent = `${job.completed} file${job.completed === 1 ? '' : 's'} saved`;
+  $('resultDetail').textContent = details.join(' · ') || `in Downloads/${job.folder || ''}`;
+  $('showFolderBtn').hidden = !job.completed;
+}
+
+function showFolder() {
+  if (lastJobShown?.lastId != null) {
+    chrome.downloads.show(lastJobShown.lastId);
+  } else {
+    chrome.downloads.showDefaultFolder();
+  }
 }

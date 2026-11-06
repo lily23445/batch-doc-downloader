@@ -3,299 +3,309 @@
 <head>
   <meta charset="UTF-8">
   <style>
+    :root {
+      --bg: #0e0f13;
+      --surface: #16181f;
+      --surface-2: #1d2029;
+      --border: #262a35;
+      --text: #e8eaf0;
+      --muted: #8b90a0;
+      --faint: #5c6170;
+      --accent: #5b8cff;
+      --accent-strong: #3d6fe8;
+      --accent-soft: rgba(91, 140, 255, 0.14);
+      --success: #3ecf8e;
+      --warn: #f5a524;
+      --danger: #f06363;
+      --radius: 10px;
+      color-scheme: dark;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f7fb;
+        --surface: #ffffff;
+        --surface-2: #f0f2f7;
+        --border: #e2e5ee;
+        --text: #171a22;
+        --muted: #646a7a;
+        --faint: #9aa0ae;
+        --accent: #3d6fe8;
+        --accent-strong: #2c5bd0;
+        --accent-soft: rgba(61, 111, 232, 0.1);
+        color-scheme: light;
+      }
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      width: 380px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f0f0f;
-      color: #e0e0e0;
+      width: 400px;
+      max-height: 600px; /* Chrome's popup height limit */
+      display: flex; flex-direction: column;
+      font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
     }
 
-    .header {
-      padding: 16px 20px;
-      background: linear-gradient(135deg, #1a1a2e, #16213e);
-      border-bottom: 1px solid #2a2a4a;
-    }
+    button { font: inherit; color: inherit; }
+    svg { flex-shrink: 0; }
 
-    .header h1 {
-      font-size: 16px;
-      font-weight: 600;
-      color: #fff;
+    /* ---------- Header ---------- */
+    header {
       display: flex;
       align-items: center;
-      gap: 8px;
-    }
-
-    .header h1 .icon { font-size: 20px; }
-
-    .header p {
-      font-size: 11px;
-      color: #8888aa;
-      margin-top: 4px;
-    }
-
-    .controls {
-      padding: 12px 20px;
-      display: flex;
-      gap: 8px;
-      border-bottom: 1px solid #1a1a1a;
-    }
-
-    .controls button {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid #333;
-      border-radius: 6px;
-      background: #1a1a1a;
-      color: #ccc;
-      font-size: 12px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .controls button:hover {
-      background: #252525;
-      border-color: #555;
-      color: #fff;
-    }
-
-    .controls button.active {
-      background: #2563eb;
-      border-color: #3b82f6;
-      color: #fff;
-    }
-
-    .folder-input {
-      padding: 10px 20px;
-      border-bottom: 1px solid #1a1a1a;
-    }
-
-    .folder-input label {
-      font-size: 11px;
-      color: #888;
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .folder-input input {
-      width: 100%;
-      padding: 7px 10px;
-      border: 1px solid #333;
-      border-radius: 6px;
-      background: #1a1a1a;
-      color: #e0e0e0;
-      font-size: 12px;
-      outline: none;
-    }
-
-    .folder-input input:focus { border-color: #2563eb; }
-
-    .file-list-container {
-      max-height: 320px;
-      overflow-y: auto;
-    }
-
-    .file-list-container::-webkit-scrollbar { width: 6px; }
-    .file-list-container::-webkit-scrollbar-track { background: transparent; }
-    .file-list-container::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-
-    .status-bar {
-      padding: 10px 20px;
-      font-size: 12px;
-      color: #888;
-      border-bottom: 1px solid #1a1a1a;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .status-bar .count { color: #2563eb; font-weight: 600; }
-
-    .file-item {
-      display: flex;
-      align-items: center;
-      padding: 8px 20px;
       gap: 10px;
-      border-bottom: 1px solid #141414;
-      transition: background 0.1s;
+      padding: 14px 16px 12px;
+    }
+    header img { width: 28px; height: 28px; border-radius: 7px; }
+    .title { flex: 1; min-width: 0; }
+    .title h1 { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; }
+    .title p {
+      font-size: 11.5px; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 
-    .file-item:hover { background: #161616; }
-
-    .file-item input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      accent-color: #2563eb;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .file-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .file-name {
-      font-size: 12px;
-      color: #ddd;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .file-type {
-      font-size: 10px;
-      color: #666;
-      margin-top: 2px;
-    }
-
-    .file-badge {
-      font-size: 9px;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      flex-shrink: 0;
-    }
-
-    .badge-pdf { background: #3b1a1a; color: #f87171; }
-    .badge-doc { background: #1a2a3b; color: #60a5fa; }
-    .badge-xls { background: #1a3b1a; color: #4ade80; }
-    .badge-img { background: #3b2a1a; color: #fbbf24; }
-    .badge-zip { background: #2a1a3b; color: #c084fc; }
-    .badge-other { background: #222; color: #888; }
-
-    .empty-state {
-      padding: 40px 20px;
-      text-align: center;
-      color: #555;
-    }
-
-    .empty-state .big-icon { font-size: 36px; margin-bottom: 12px; }
-    .empty-state p { font-size: 13px; }
-    .empty-state .hint { font-size: 11px; margin-top: 6px; color: #444; }
-
-    .footer {
-      padding: 12px 20px;
-      border-top: 1px solid #1a1a1a;
-    }
-
-    .download-btn {
-      width: 100%;
-      padding: 10px;
-      border: none;
+    .icon-btn {
+      width: 32px; height: 32px;
+      display: grid; place-items: center;
+      border: 1px solid var(--border);
       border-radius: 8px;
-      background: #2563eb;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 600;
+      background: var(--surface);
+      color: var(--muted);
       cursor: pointer;
-      transition: all 0.15s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    .icon-btn:hover { color: var(--text); border-color: var(--faint); }
+    .icon-btn:disabled { opacity: .5; cursor: default; }
+    .icon-btn.spinning svg { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Folder ---------- */
+    .folder { padding: 0 16px 12px; }
+    .folder-field {
+      display: flex; align-items: center; gap: 8px;
+      height: 36px; padding: 0 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .folder-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .folder-field svg { color: var(--muted); }
+    .folder-field .prefix { color: var(--faint); white-space: nowrap; }
+    .folder-field input {
+      flex: 1; min-width: 0;
+      border: 0; outline: 0; background: transparent;
+      color: var(--text); font: inherit; font-weight: 500;
     }
 
-    .download-btn:hover { background: #1d4ed8; }
-    .download-btn:disabled { background: #1a1a2e; color: #444; cursor: not-allowed; }
-
-    .progress-bar {
-      height: 3px;
-      background: #1a1a1a;
-      border-radius: 2px;
-      margin-top: 8px;
-      overflow: hidden;
-      display: none;
+    /* ---------- Search + filters ---------- */
+    .toolbar { padding: 0 16px 10px; display: flex; flex-direction: column; gap: 8px; }
+    .search {
+      display: flex; align-items: center; gap: 8px;
+      height: 34px; padding: 0 10px;
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      color: var(--muted);
     }
-
-    .progress-bar .fill {
-      height: 100%;
-      background: #2563eb;
-      border-radius: 2px;
-      transition: width 0.3s;
-      width: 0%;
+    .search input {
+      flex: 1; border: 0; outline: 0; background: transparent;
+      color: var(--text); font: inherit;
     }
+    .search input::placeholder { color: var(--faint); }
 
-    .scan-btn {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #333;
-      border-radius: 8px;
-      background: #1a1a1a;
-      color: #ccc;
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.15s;
-      margin-bottom: 8px;
-    }
-
-    .scan-btn:hover { background: #252525; border-color: #555; color: #fff; }
-
-    .filter-row {
-      padding: 8px 20px;
-      border-bottom: 1px solid #1a1a1a;
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .filter-chip {
-      font-size: 10px;
-      padding: 3px 8px;
-      border-radius: 10px;
-      border: 1px solid #333;
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      height: 26px; padding: 0 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
       background: transparent;
-      color: #888;
+      color: var(--muted);
+      font-size: 11.5px; font-weight: 550;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all .15s;
+    }
+    .chip .n { color: var(--faint); font-weight: 500; }
+    .chip:hover { color: var(--text); border-color: var(--faint); }
+    .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .chip.active .n { color: var(--accent); opacity: .75; }
+
+    /* ---------- List ---------- */
+    .list-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px; color: var(--muted);
+    }
+    .list-head label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+    .list-head strong { color: var(--text); font-weight: 600; }
+
+    input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer; flex-shrink: 0;
     }
 
-    .filter-chip:hover { border-color: #555; color: #ccc; }
-    .filter-chip.active { background: #2563eb22; border-color: #2563eb; color: #60a5fa; }
+    #fileList { height: 300px; min-height: 120px; flex: 0 1 auto; overflow-y: auto; }
+    #fileList::-webkit-scrollbar { width: 8px; }
+    #fileList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; border: 2px solid var(--bg); }
+
+    .row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: background .1s;
+    }
+    .row:hover { background: var(--surface); }
+    .row.off .info { opacity: .45; }
+    .row.off .type { filter: grayscale(1); opacity: .5; }
+
+    .type {
+      width: 38px; height: 38px; border-radius: 8px;
+      display: grid; place-items: center;
+      font-size: 9.5px; font-weight: 750; letter-spacing: .02em;
+      flex-shrink: 0;
+    }
+    .t-pdf   { background: rgba(240, 99, 99, .14);  color: #f06363; }
+    .t-doc   { background: rgba(91, 140, 255, .14); color: #5b8cff; }
+    .t-xls   { background: rgba(62, 207, 142, .14); color: #2fbf7f; }
+    .t-ppt   { background: rgba(245, 140, 60, .15); color: #f08c3c; }
+    .t-img   { background: rgba(245, 165, 36, .15); color: #e09a1a; }
+    .t-zip   { background: rgba(168, 120, 255, .15); color: #a878ff; }
+    .t-media { background: rgba(236, 92, 160, .14); color: #ec5ca0; }
+    .t-other { background: var(--surface-2); color: var(--muted); }
+
+    .info { flex: 1; min-width: 0; }
+    .name {
+      font-weight: 550;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .meta {
+      margin-top: 1px;
+      font-size: 11.5px; color: var(--faint);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .meta .tag { color: var(--muted); }
+
+    /* ---------- States ---------- */
+    .state {
+      height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; padding: 24px; text-align: center;
+      color: var(--muted);
+    }
+    .state .big { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--surface); margin-bottom: 6px; }
+    .state h2 { font-size: 13.5px; font-weight: 600; color: var(--text); }
+    .state p { font-size: 12px; max-width: 280px; }
+
+    .skeleton { display: flex; align-items: center; gap: 10px; padding: 8px 16px; }
+    .skeleton i { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* ---------- Footer ---------- */
+    footer {
+      padding: 12px 16px 14px;
+      border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+
+    .progress-top { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .progress-top strong { color: var(--text); font-weight: 600; }
+    .bar { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+    .bar .fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .3s; }
+
+    .result {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .result .dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
+    .result.ok .dot { background: rgba(62, 207, 142, .15); color: var(--success); }
+    .result.warn .dot { background: rgba(245, 165, 36, .15); color: var(--warn); }
+    .result .text { flex: 1; min-width: 0; }
+    .result .text strong { display: block; font-weight: 600; }
+    .result .text span { font-size: 11.5px; color: var(--muted); }
+    .link-btn {
+      border: 0; background: none;
+      color: var(--accent); font-weight: 600; font-size: 12px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .link-btn:hover { text-decoration: underline; }
+
+    .primary {
+      height: 40px; width: 100%;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      border: 0; border-radius: var(--radius);
+      background: var(--accent);
+      color: #fff; font-weight: 600; font-size: 13.5px;
+      cursor: pointer;
+      transition: background .15s, transform .05s;
+    }
+    .primary:hover { background: var(--accent-strong); }
+    .primary:active { transform: scale(.99); }
+    .primary:disabled { background: var(--surface-2); color: var(--faint); cursor: default; transform: none; }
+
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1><span class="icon">📥</span> Batch Doc Downloader</h1>
-    <p>Scan, select, and download documents in one click</p>
-  </div>
-
-  <div class="folder-input">
-    <label>Download folder name</label>
-    <input type="text" id="folderName" placeholder="e.g. Project-Documents" />
-  </div>
-
-  <div class="controls">
-    <button id="selectAll">Select All</button>
-    <button id="deselectAll">Deselect All</button>
-  </div>
-
-  <div class="filter-row" id="filterRow" style="display:none;"></div>
-
-  <div class="status-bar" id="statusBar" style="display:none;">
-    <span><span class="count" id="selectedCount">0</span> selected</span>
-    <span id="totalCount">0 found</span>
-  </div>
-
-  <div class="file-list-container" id="fileList">
-    <div class="empty-state">
-      <div class="big-icon">🔍</div>
-      <p>Click "Scan Page" to find documents</p>
-      <p class="hint">Works on any page with downloadable files</p>
+  <header>
+    <img src="icons/icon48.png" alt="">
+    <div class="title">
+      <h1>Batch Doc Downloader</h1>
+      <p id="pageHost">Scanning this page…</p>
     </div>
-  </div>
-
-  <div class="footer">
-    <button class="scan-btn" id="scanBtn">🔍 Scan This Page</button>
-    <button class="download-btn" id="downloadBtn" disabled>
-      <span>⬇</span> Download Selected
+    <button class="icon-btn" id="rescanBtn" title="Scan again">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
     </button>
-    <div class="progress-bar" id="progressBar">
-      <div class="fill" id="progressFill"></div>
+  </header>
+
+  <section class="folder">
+    <div class="folder-field" title="Files are saved in this folder inside your Downloads folder">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span class="prefix">Downloads /</span>
+      <input type="text" id="folderName" placeholder="Folder name" spellcheck="false" />
     </div>
+  </section>
+
+  <section class="toolbar" id="toolbar" hidden>
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="text" id="search" placeholder="Search files" spellcheck="false" />
+    </div>
+    <div class="chips" id="filterRow"></div>
+  </section>
+
+  <div class="list-head" id="listHead" hidden>
+    <label>
+      <input type="checkbox" id="checkAll" />
+      <span id="selectionText"></span>
+    </label>
+    <span id="visibleText"></span>
   </div>
+
+  <main id="fileList"></main>
+
+  <footer>
+    <div id="progress" hidden>
+      <div class="progress-top"><span id="progressText"></span><strong id="progressPct"></strong></div>
+      <div class="bar"><div class="fill" id="progressFill"></div></div>
+    </div>
+    <div class="result" id="result" hidden>
+      <div class="dot" id="resultIcon"></div>
+      <div class="text"><strong id="resultTitle"></strong><span id="resultDetail"></span></div>
+      <button class="link-btn" id="showFolderBtn">Show in folder</button>
+    </div>
+    <button class="primary" id="downloadBtn" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
+      <span id="downloadLabel">Download</span>
+    </button>
+  </footer>
 
   <script src="popup.js"></script>
 </body>
