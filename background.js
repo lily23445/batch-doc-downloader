@@ -6,6 +6,8 @@
 const pendingNames = new Map();
 // Google downloads that came back as a sign-in page instead of a file.
 const loginNeededIds = new Set();
+// Guessed links that turned out to be web pages, not files.
+const webPageIds = new Set();
 
 // Names servers often send that say nothing about the file.
 const GENERIC_STEMS = /^(view|download|downloads|file|files|index|get|getfile|export|attachment|uc|document|dl)$/i;
@@ -86,11 +88,11 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
   }
   pendingNames.delete(item.url);
 
-  // Google sends its sign-in / "no access" page as HTML instead of the file.
-  // Don't save that page — cancel and report it.
-  if (entry.google && /^text\/html/i.test(item.mime || '')) {
+  // We guessed this link was a file, but the site answered with a web page
+  // (Google's sign-in page, a Moodle info page, ...). Don't save it — cancel and report.
+  if (entry.nameFromServer && /^text\/html/i.test(item.mime || '')) {
     suggest();
-    loginNeededIds.add(item.id);
+    (entry.google ? loginNeededIds : webPageIds).add(item.id);
     chrome.downloads.cancel(item.id);
     return;
   }
@@ -160,8 +162,18 @@ chrome.downloads.onChanged.addListener((delta) => {
   withState((state) => {
     if (!state.ids[delta.id]) return;
     delete state.ids[delta.id];
-    if (loginNeededIds.delete(delta.id)) state.job.loginNeeded = (state.job.loginNeeded || 0) + 1;
-    settle(state, s);
+    if (loginNeededIds.delete(delta.id)) {
+      state.job.loginNeeded = (state.job.loginNeeded || 0) + 1;
+      settle(state, s);
+    } else if (webPageIds.delete(delta.id)) {
+      // Not a failure: it just wasn't a file
+      state.job.total--;
+      state.job.skipped = (state.job.skipped || 0) + 1;
+      state.job.finished = state.job.completed + state.job.failed >= state.job.total;
+      broadcast(state.job);
+    } else {
+      settle(state, s);
+    }
   });
 });
 
@@ -169,7 +181,7 @@ async function startBatch(folder, items) {
   const job = await withState((state) => {
     // A new batch while one is running just extends it.
     if (!state.job || state.job.finished) {
-      state.job = { total: 0, completed: 0, failed: 0, loginNeeded: 0, finished: false };
+      state.job = { total: 0, completed: 0, failed: 0, loginNeeded: 0, skipped: 0, finished: false };
       state.ids = {};
     }
     state.job.total += items.length;

@@ -130,7 +130,7 @@ async function scanPage() {
 }
 
 // Runs inside the web page (each frame). Must be self-contained: no outside references.
-function findDocuments() {
+async function findDocuments() {
   const EXTS = [
     'pdf','doc','docx','xls','xlsx','csv','ppt','pptx','txt','rtf',
     'odt','ods','odp','zip','rar','7z','tar','gz',
@@ -215,6 +215,39 @@ function findDocuments() {
 
   const found = [];
   const seen = new Set();
+  const moodleUrlLinks = [];
+
+  // Open a Moodle URL activity's info page (same site, your login) and read the
+  // external link it points to. forceview=1 shows the page instead of redirecting.
+  async function resolveMoodleUrl(href) {
+    const u = new URL(href);
+    u.searchParams.set('forceview', '1');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await fetch(u.href, { credentials: 'include', signal: ctrl.signal });
+      if (!res.ok) return null;
+      // Moodle may already have redirected us to a same-site file
+      if (res.url && !/\/mod\/url\/view\.php/i.test(new URL(res.url).pathname)) return res.url;
+      const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+      const main = doc.querySelector('#region-main, [role="main"]') || doc;
+      const direct = main.querySelector('.urlworkaround a[href], object[data], embed[src], iframe[src]');
+      const pick = direct && (direct.getAttribute('href') || direct.getAttribute('data') || direct.getAttribute('src'));
+      if (pick) return new URL(pick, u).href;
+      // Fallback: first link in the main area that leaves this site
+      for (const a of main.querySelectorAll('a[href]')) {
+        try {
+          const target = new URL(a.getAttribute('href'), u);
+          if (/^https?:$/.test(target.protocol) && target.origin !== location.origin) return target.href;
+        } catch {}
+      }
+    } catch {
+      // timeout / network error: skip this one
+    } finally {
+      clearTimeout(timer);
+    }
+    return null;
+  }
 
   // drive.google.com/file/d/ID/view  -> direct download (uses your Google sign-in in Chrome)
   // docs.google.com/document|spreadsheets|presentation/d/ID/edit -> export as PDF / XLSX / PDF
@@ -265,6 +298,13 @@ function findDocuments() {
     // Plain in-page anchors (#section) on the current page aren't files.
     if (url.hash && url.href.split('#')[0] === location.href.split('#')[0]) return;
     href = url.href;
+
+    // Moodle "URL" activities are just pointers to another site (often Google Drive).
+    // Look them up after the scan to find where they really go.
+    if (url.origin === location.origin && /\/mod\/url\/view\.php$/i.test(url.pathname)) {
+      moodleUrlLinks.push({ href, linkText });
+      return;
+    }
 
     const pathExt = extFromUrl(url);
     // Link text that's just the URL makes a useless file name
@@ -337,6 +377,15 @@ function findDocuments() {
     if (ext && extensions.has(ext) && /^https?:$/.test(url.protocol)) {
       add(url.href, url.pathname.split('/').pop(), ext, el.title || '', false);
     }
+  }
+
+  // Resolve Moodle URL activities a few at a time, then treat the real link like any other
+  for (let i = 0; i < moodleUrlLinks.length; i += 6) {
+    const batch = moodleUrlLinks.slice(i, i + 6);
+    const targets = await Promise.all(batch.map((m) => resolveMoodleUrl(m.href)));
+    targets.forEach((target, j) => {
+      if (target) considerUrl(target, null, batch[j].linkText, null);
+    });
   }
 
   // The tab itself is a Google Drive / Docs file you're viewing
@@ -471,9 +520,10 @@ function showJob(job) {
   }
 
   const login = job.loginNeeded ? ` (${job.loginNeeded} need Google sign-in)` : '';
+  const skipped = job.skipped ? `, ${job.skipped} skipped (web pages)` : '';
   btn.innerHTML = job.failed
-    ? `<span>⚠️</span> ${job.completed} saved, ${job.failed} failed${login}`
-    : `<span>✅</span> ${job.completed} saved`;
+    ? `<span>⚠️</span> ${job.completed} saved, ${job.failed} failed${login}${skipped}`
+    : `<span>✅</span> ${job.completed} saved${skipped}`;
   setTimeout(() => {
     btn.innerHTML = '<span>⬇</span> Download Selected';
     progressBar.style.display = 'none';

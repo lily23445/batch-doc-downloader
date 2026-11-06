@@ -62,6 +62,8 @@ Private files use the Google account you're signed in to in Chrome, so sign in t
 
 - Detects file type from Moodle's file icons when the link has no extension
 - Adds `forcedownload=1` to resource links so files download instead of opening in the browser viewer
+- Follows **URL activities** (the link icon) to where they really point. If that's a Google Drive file or a document, it downloads the file instead of Moodle's info page
+- If a link turns out to be a web page rather than a file, it isn't saved; the popup reports it as "skipped (web pages)"
 
 ## Supported file types
 
