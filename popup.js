@@ -104,6 +104,8 @@ async function scanPage() {
       const folderInput = document.getElementById('folderName');
       if (!folderInput.value) {
         const sanitized = (tab.title || '')
+          .replace(/\s+-\s+Google (Drive|Docs|Sheets|Slides)\s*$/i, '')
+          .replace(/\.[a-z0-9]{2,5}$/i, '')
           .replace(/[^a-zA-Z0-9\s-]/g, '')
           .trim()
           .replace(/\s+/g, '-')
@@ -334,6 +336,21 @@ function findDocuments() {
     const ext = extFromUrl(url);
     if (ext && extensions.has(ext) && /^https?:$/.test(url.protocol)) {
       add(url.href, url.pathname.split('/').pop(), ext, el.title || '', false);
+    }
+  }
+
+  // The tab itself is a Google Drive / Docs file you're viewing
+  {
+    const g = googleDownload(new URL(location.href));
+    if (g) {
+      const title = (document.title || '')
+        .replace(/\s+-\s+Google (Drive|Docs|Sheets|Slides)\s*$/i, '')
+        .trim();
+      let name = cleanName(title);
+      if (name && g.ext && !name.toLowerCase().endsWith('.' + g.ext)) name = `${name}.${g.ext}`;
+      const titleExt = (name.match(/\.([a-z0-9]{2,5})$/i) || [])[1];
+      const ext = g.ext || (titleExt && extensions.has(titleExt.toLowerCase()) ? titleExt.toLowerCase() : '');
+      add(g.href, name, ext, title, true, { google: true });
     }
   }
 
