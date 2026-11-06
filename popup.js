@@ -489,8 +489,12 @@ async function downloadSelected() {
     let url = file.url;
     try {
       const u = new URL(url);
-      if (/\/mod\/resource\/view\.php/i.test(u.pathname) && !u.searchParams.has('forcedownload')) {
-        u.searchParams.set('forcedownload', '1');
+      if (/\/mod\/resource\/view\.php/i.test(u.pathname)) {
+        // redirect=1 makes Moodle send the file itself, even for resources set to
+        // show in a viewer page (images, embedded PDFs) instead of downloading.
+        u.searchParams.set('redirect', '1');
+        u.searchParams.delete('forceview');
+        if (!u.searchParams.has('forcedownload')) u.searchParams.set('forcedownload', '1');
         url = u.toString();
       }
     } catch {}
