@@ -39,13 +39,24 @@ It started as a Moodle tool. It now works on almost any website with files on it
 
 - Links that end in a file type (`report.pdf`, `data.xlsx?token=…`)
 - Files named in the link (`?file=slides.pptx`, `?format=csv`)
-- Download-style links: the `download` attribute, `/download`, `/attachments/…`, Google Drive download links, Moodle `pluginfile.php` and `mod/resource` links
+- Download-style links: the `download` attribute, `/download`, `/attachments/…`, Moodle `pluginfile.php` and `mod/resource` links
+- Google Drive, Docs, Sheets and Slides links (see below)
 - Links with a file-type icon (like Moodle's PDF icon), or text such as "Budget (PDF, 2 MB)" or "Download brochure"
 - PDFs and media embedded in the page
 - Links inside same-site frames and web components (shadow DOM)
 - The tab itself, if you're viewing a file directly
 
 When the type or name is a guess, the file is marked "name from site", and the real name from the server is used.
+
+### Google Drive and Google Docs links
+
+Lots of course pages share files as Google Drive links (`drive.google.com/file/d/…/view`), which normally just open a preview. The extension turns them into real downloads:
+
+- Drive files (`/file/d/…`, `open?id=…`, embedded previews) download as the original file, with its real name
+- Google Docs download as PDF, Google Slides as PDF, Google Sheets as Excel (`.xlsx`)
+- Drive folders are skipped (only single files are supported)
+
+Private files use the Google account you're signed in to in Chrome, so sign in to Google first. If you're not signed in, or that account doesn't have access, the extension doesn't save Google's sign-in page as a fake file. It skips that file and tells you, for example "2 need Google sign-in".
 
 ### Moodle extras
 

@@ -214,14 +214,44 @@ function findDocuments() {
   const found = [];
   const seen = new Set();
 
-  function add(href, filename, ext, text, nameFromServer) {
+  // drive.google.com/file/d/ID/view  -> direct download (uses your Google sign-in in Chrome)
+  // docs.google.com/document|spreadsheets|presentation/d/ID/edit -> export as PDF / XLSX / PDF
+  function googleDownload(url) {
+    const host = url.hostname;
+    const userMatch = url.pathname.match(/\/u\/(\d+)\//);
+    const authuser = url.searchParams.get('authuser') || (userMatch && userMatch[1]);
+    const withUser = (u) => (authuser ? `${u}${u.includes('?') ? '&' : '?'}authuser=${encodeURIComponent(authuser)}` : u);
+
+    if (host === 'drive.google.com' || host === 'drive.usercontent.google.com') {
+      const m = url.pathname.match(/\/file(?:\/u\/\d+)?\/d\/([\w-]{10,})/);
+      const id = m ? m[1] : (/^\/(open|uc|download)$/.test(url.pathname) ? url.searchParams.get('id') : null);
+      if (!id) return null; // folders etc. aren't single files
+      return {
+        href: withUser(`https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`),
+        ext: '',
+      };
+    }
+
+    if (host === 'docs.google.com') {
+      const m = url.pathname.match(/^\/(document|spreadsheets|presentation)(?:\/u\/\d+)?\/d\/([\w-]{10,})/);
+      if (!m) return null;
+      const [, kind, id] = m;
+      const base = `https://docs.google.com/${kind}/d/${id}`;
+      if (kind === 'document') return { href: withUser(`${base}/export?format=pdf`), ext: 'pdf' };
+      if (kind === 'spreadsheets') return { href: withUser(`${base}/export?format=xlsx`), ext: 'xlsx' };
+      return { href: withUser(`${base}/export/pdf`), ext: 'pdf' };
+    }
+    return null;
+  }
+
+  function add(href, filename, ext, text, nameFromServer, extra = {}) {
     if (seen.has(href)) return;
     seen.add(href);
     if (filename) {
       try { filename = decodeURIComponent(filename); } catch {}
       filename = filename.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim();
     }
-    found.push({ url: href, filename: filename || '', ext: ext || '', text, nameFromServer });
+    found.push({ url: href, filename: filename || '', ext: ext || '', text, nameFromServer, ...extra });
   }
 
   function considerUrl(href, el, linkText, downloadAttr) {
@@ -235,7 +265,16 @@ function findDocuments() {
     href = url.href;
 
     const pathExt = extFromUrl(url);
-    const base = cleanName(linkText);
+    // Link text that's just the URL makes a useless file name
+    const base = /^(https?:\/\/|www\.)/i.test(linkText) ? '' : cleanName(linkText);
+
+    // 0. Google Drive / Docs viewer links → their direct download URL
+    const g = googleDownload(url);
+    if (g) {
+      const name = base && g.ext ? `${base}.${g.ext}` : base;
+      add(g.href, name, g.ext, linkText, true, { google: true });
+      return;
+    }
 
     // 1. URL path ends in a known file extension — most reliable.
     if (pathExt && extensions.has(pathExt)) {
@@ -287,6 +326,11 @@ function findDocuments() {
     const src = el.getAttribute('src') || el.getAttribute('data');
     let url;
     try { url = new URL(src, document.baseURI); } catch { continue; }
+    const g = googleDownload(url);
+    if (g) {
+      add(g.href, el.title ? cleanName(el.title) + (g.ext ? `.${g.ext}` : '') : '', g.ext, el.title || '', true, { google: true });
+      continue;
+    }
     const ext = extFromUrl(url);
     if (ext && extensions.has(ext) && /^https?:$/.test(url.protocol)) {
       add(url.href, url.pathname.split('/').pop(), ext, el.title || '', false);
@@ -336,7 +380,8 @@ function renderFiles(filter = 'all') {
     const info = DOC_EXTENSIONS[file.ext] || { label: file.ext ? file.ext.toUpperCase() : 'FILE', badge: 'badge-other' };
     const displayName = file.filename || file.text || file.url;
     let subtitle = file.text && file.text !== file.filename ? file.text : '';
-    if (file.nameFromServer) subtitle = subtitle ? `${subtitle} · name from site` : 'name from site';
+    const note = file.google ? 'Google Drive · uses your Google sign-in' : (file.nameFromServer ? 'name from site' : '');
+    if (note) subtitle = subtitle ? `${subtitle} · ${note}` : note;
     return `
       <div class="file-item">
         <input type="checkbox" data-index="${index}" checked />
@@ -383,7 +428,7 @@ async function downloadSelected() {
         url = u.toString();
       }
     } catch {}
-    return { url, filename: file.filename, ext: file.ext, nameFromServer: file.nameFromServer };
+    return { url, filename: file.filename, ext: file.ext, nameFromServer: file.nameFromServer, google: !!file.google };
   });
 
   if (items.length === 0) return;
@@ -408,8 +453,9 @@ function showJob(job) {
     return;
   }
 
+  const login = job.loginNeeded ? ` (${job.loginNeeded} need Google sign-in)` : '';
   btn.innerHTML = job.failed
-    ? `<span>⚠️</span> ${job.completed} saved, ${job.failed} failed`
+    ? `<span>⚠️</span> ${job.completed} saved, ${job.failed} failed${login}`
     : `<span>✅</span> ${job.completed} saved`;
   setTimeout(() => {
     btn.innerHTML = '<span>⬇</span> Download Selected';

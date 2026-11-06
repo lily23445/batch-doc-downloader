@@ -4,6 +4,8 @@
 // url -> { folder, filename, ext, nameFromServer } for downloads we've started
 // but Chrome hasn't named yet.
 const pendingNames = new Map();
+// Google downloads that came back as a sign-in page instead of a file.
+const loginNeededIds = new Set();
 
 // Names servers often send that say nothing about the file.
 const GENERIC_STEMS = /^(view|download|downloads|file|files|index|get|getfile|export|attachment|uc|document|dl)$/i;
@@ -83,6 +85,16 @@ chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     return;
   }
   pendingNames.delete(item.url);
+
+  // Google sends its sign-in / "no access" page as HTML instead of the file.
+  // Don't save that page — cancel and report it.
+  if (entry.google && /^text\/html/i.test(item.mime || '')) {
+    suggest();
+    loginNeededIds.add(item.id);
+    chrome.downloads.cancel(item.id);
+    return;
+  }
+
   const folder = sanitizePart(entry.folder, 'Batch-Downloads');
   const name = sanitizePart(chooseName(entry, item), 'download');
   suggest({ filename: `${folder}/${name}`, conflictAction: 'uniquify' });
@@ -148,6 +160,7 @@ chrome.downloads.onChanged.addListener((delta) => {
   withState((state) => {
     if (!state.ids[delta.id]) return;
     delete state.ids[delta.id];
+    if (loginNeededIds.delete(delta.id)) state.job.loginNeeded = (state.job.loginNeeded || 0) + 1;
     settle(state, s);
   });
 });
@@ -156,7 +169,7 @@ async function startBatch(folder, items) {
   const job = await withState((state) => {
     // A new batch while one is running just extends it.
     if (!state.job || state.job.finished) {
-      state.job = { total: 0, completed: 0, failed: 0, finished: false };
+      state.job = { total: 0, completed: 0, failed: 0, loginNeeded: 0, finished: false };
       state.ids = {};
     }
     state.job.total += items.length;
