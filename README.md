@@ -62,12 +62,6 @@ When the type or name is a guess, the file is marked "name from site", and the r
 | Media | `mp3`, `mp4`, `wav` |
 | Data | `json`, `xml` |
 
-## Saving straight to Google Drive
-
-1. Install [Google Drive for desktop](https://www.google.com/drive/download/). It adds a `Google Drive` folder to your computer that syncs automatically.
-2. In Chrome, go to **Settings → Downloads → Location** and pick a folder inside Google Drive.
-3. Every batch you download now syncs to Drive by itself.
-
 ## Limits
 
 - Files behind buttons that only run JavaScript (no real link) can't be detected.
